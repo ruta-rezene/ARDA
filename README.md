@@ -1,172 +1,157 @@
-# CADS — Co-Evolutionary Adversarial Detection System
+# ARDA — Adversarial Resilience for Data Authenticity
 
-**Co-Evolutionary Adversarial Detection Under Gray-Box Attack in Plant Phenotyping Pipelines**
+ARDA is a multi-agent adversarial framework for studying and detecting image manipulation in scientific data pipelines. It is designed specifically for plant phenotyping systems, where corrupted image inputs can silently propagate through AI models and corrupt downstream genomic research outcomes.
 
-University of Arizona UROC Research Program | Student: Ruta Rezene | PI: Alex
-
----
-
-## What this is
-
-CADS is a co-evolutionary adversarial machine learning system that simulates and studies
-an arms race between an adaptive attacker (Red) and an adaptive defender (Blue), applied
-to real plant root architecture images from a computational plant science lab.
-
-Red manipulates images across three simultaneous channels — pixel structure, EXIF metadata,
-and JPEG compression fingerprints. Blue detects manipulation using a Vision Transformer (ViT)
-alongside metadata consistency checking and relative compression analysis. Both agents adapt
-round-to-round through documented skills. Neither resets between rounds.
-
-The system is grounded in Cyber Threat Intelligence (CTI), with three adversary motivation
-profiles operationalized as distinct reward functions to empirically characterize the tradeoff
-between evasion efficiency and downstream classification damage.
+The system simulates an adaptive attacker and an adaptive defender co-evolving across iterative rounds on real plant root architecture images. Three Cyber Threat Intelligence (CTI) adversary motivation profiles are operationalized as formal reward functions to study whether adversary motivation produces measurably distinct evasion-damage tradeoffs — a foundational claim in threat intelligence practice that has not previously been tested in a controlled experimental setting.
 
 ---
 
-## Research questions
+## Research Context
 
-**RQ1:** Does continuous co-evolutionary training with an adaptive attacker agent develop
-stronger detection of unseen plant image manipulation compared to a detection model trained
-on a fixed, static dataset?
+Automated plant phenotyping pipelines extract biological trait measurements from root images. These measurements feed into genome-wide association studies (GWAS) that identify gene-trait links used to guide crop breeding programs. A silent adversarial attack on the image data entering these pipelines can corrupt trait measurements, distort GWAS associations, and misdirect breeding decisions — with consequences that may not surface until failed field trials years later.
 
-**RQ2:** Do different threat actor motivations (APT/stealth, cybercriminal/balanced,
-hacktivist/damage) produce measurably different attack strategies, and is there a real
-tradeoff between evasion and downstream damage?
+This problem is especially acute in resource-constrained research environments in the Global South, where a single pipeline may serve as the sole empirical basis for food security decisions with no independent verification capacity.
+
+ARDA addresses this gap by building a forensic detection system and using it as an experimental instrument to characterize how different threat actor types behave under adaptive detection pressure.
 
 ---
 
-## Project structure
+## System Architecture
 
 ```
-CADS/
+ARDA/
+├── main.py                        ← entry point
+├── requirements.txt
 ├── src/
 │   ├── agents/
-│   │   ├── red.py          # Agentic Red attacker — adaptive epsilon + indicator removal
-│   │   └── blue.py         # Agentic Blue defender — ViT + adaptive threshold
+│   │   ├── red.py                 ← attacker agent (4 adaptive skills, 3 CTI personas)
+│   │   └── blue.py                ← defender agent (ViT + 3 forensic channels)
 │   ├── core/
-│   │   └── cads.py         # Shared image loading utility (pixels, EXIF, compression)
-│   ├── preprocessing/
-│   │   └── transforms.py   # Normalization and CLAHE preprocessing passes
+│   │   ├── cads.py                ← image loading + quantization signatures
+│   │   ├── engine.py              ← co-evolution loop
+│   │   └── pretrain.py            ← offline dataset generation and training
 │   └── evaluation/
-│       └── metrics.py      # Accuracy, precision, recall, F1, confusion matrix
-├── scripts/
-│   └── run.py              # Main co-evolution loop — entry point
-├── tests/
-│   └── test_pipeline.py    # Smoke tests for each component
-├── examples/
-│   └── single_image.py     # Run CADS on one image and print results
-├── docs/
-│   ├── ARCHITECTURE.md     # How the system works
-│   └── RESULTS.md          # Current experimental results
-├── results/                # Output graphs saved here (gitignored)
-├── .gitignore
-├── requirements.txt
-└── README.md
+│       └── stats.py               ← all research graphs
+├── data/testImages/               ← place your root images here
+├── models/                        ← trained weights saved here
+├── dataset/                       ← generated training pairs saved here
+└── results/                       ← all graphs and JSON summaries saved here
 ```
 
 ---
 
-## Quickstart
+## Installation
 
 ```bash
-git clone https://github.com/yourusername/CADS.git
-cd CADS
-python3.11 -m venv cads_env
-source cads_env/bin/activate
+git clone https://github.com/rutarezene/arda
+cd arda
+python3 -m venv arda_env
+source arda_env/bin/activate
 pip install -r requirements.txt
-python3 scripts/run.py testImages/L882015
+```
+
+Place your root images in `data/testImages/`. Any subfolder structure is supported.
+
+---
+
+## Usage
+
+```bash
+python3 main.py
+```
+
+Four modes are available.
+
+**Mode 1 — Simulation**
+Runs one CTI persona for a chosen number of rounds. Red attacks and Blue defends across iterative rounds, both adapting based on outcomes. Produces six research-grade figures and a JSON summary. This is where the primary experimental findings come from.
+
+**Mode 2 — Detection**
+Loads trained Blue weights and runs forensic inspection on every image in a folder. Returns CLEAN or TAMPERED per image with the contributing detection channel. Generates a provenance ledger with SHA-256 cryptographic hashes for chain-of-custody verification. Intended for use before images enter a phenotyping pipeline.
+
+**Mode 3 — Pretrain**
+Generates a labeled dataset of clean and tampered image pairs across all three personas at randomized perturbation levels. Trains Blue's Vision Transformer on that dataset with a proper train/validation split. Saves pretrained weights to `models/blue_pretrained.pt`. Run this first on a GPU before any simulation to ensure Blue enters the arms race already trained on hundreds of images.
+
+**Mode 4 — Compare**
+Runs all three CTI personas under identical conditions and produces the persona comparison figures, including the evasion-damage Pareto tradeoff plot that is the primary research finding.
+
+**Recommended order:**
+```
+Mode 3 → Mode 4 → Mode 1 → Mode 2
 ```
 
 ---
 
-## Requirements
+## The Attacker (Red Agent)
 
-- Python 3.11
-- torch==2.2.2
-- numpy<2
-- pillow
-- opencv-python-headless
-- matplotlib
+Red applies three simultaneous independent manipulation channels each round:
 
-See `requirements.txt` for full list.
+- **Pixel channel** — Canny edge-guided structured noise targeting root branch regions at magnitude epsilon
+- **Metadata channel** — forged EXIF fields including camera make, model, and timestamp
+- **Compression channel** — JPEG re-encoding at a learned quality level, producing a detectable quantization signature shift
 
----
+Red has four adaptive skills:
 
-## How Red and Blue work
+| Skill | Behavior | MITRE ATT&CK Mapping |
+|---|---|---|
+| 1 | Epsilon control, persona-specific band | — |
+| 2 | Software tag removal after repeated metadata catches | T1070 Indicator Removal |
+| 3 | Full realistic EXIF forgery after continued metadata catches | T1070 |
+| 4 | Compression quality lift when compression channel catches Red | — |
 
-**Red** attacks each image across three channels simultaneously:
-1. Structural pixel perturbation — Canny edge detection finds root branches, targeted noise applied along branch regions
-2. EXIF metadata forgery — plausible fake camera Make/Model/DateTime. Removes Software tag if metadata check catches it twice (MITRE ATT&CK: Indicator Removal on Host)
-3. Compression fingerprint shift — variable 3-10 point JPEG quality drop
+Three CTI personas operationalize real adversary motivation profiles:
 
-Red adapts every round: increases perturbation strength if caught, decreases if evading.
-
-**Blue** checks three independent signals:
-1. Vision Transformer pixel confidence vs adaptive threshold
-2. Software EXIF tag presence (suspicious in unedited lab images)
-3. Relative JPEG quality drop from original fingerprint
-
-Blue retrains its ViT each round on observed images and recalibrates its detection threshold based on recent false positive and false negative rates.
-
----
-
-## CTI adversary personas (RQ2)
-
-| Persona | Evasion weight | Damage weight | Real-world analogue |
+| Persona | Evasion Weight | Damage Weight | Behavior |
 |---|---|---|---|
-| APT / stealth | 0.9 | 0.1 | State-aligned persistent threat |
-| Cybercriminal | 0.5 | 0.5 | Financially motivated attacker |
-| Hacktivist | 0.1 | 0.9 | Ideologically motivated disruptor |
+| APT | 0.9 | 0.1 | Stealth-first, low epsilon, hard to detect |
+| Cybercriminal | 0.5 | 0.5 | Balanced evasion and damage |
+| Hacktivist | 0.1 | 0.9 | Damage-first, high epsilon, detectable |
 
 ---
 
-## License
+## The Defender (Blue Agent)
 
-MIT
+Blue runs three independent forensic detection channels:
+
+- **Pixel channel** — Vision Transformer operating on the high-pass residual of each image. The residual (image minus local 3×3 blur, amplified ×8) concentrates adversarial perturbation noise into a separable feature space following the Spatial Rich Model principle from image steganalysis
+- **Metadata channel** — three sub-checks: editing software tag presence, DateTime freshness under 24 hours, and EXIF field sparsity inconsistent with genuine camera capture
+- **Compression channel** — compares the JPEG luminance quantization table mean against a clean reference derived from the image pool, flagging re-encoding artifacts
+
+Blue has two adaptive skills:
+
+- **Skill 1** — adaptive detection threshold based on recent false positive and false negative rates
+- **Skill 2** — online ViT retraining on a 200-image replay buffer each round
 
 ---
 
-## Two modes
+## Output Figures
 
-### Mode 1 — Simulation (research)
-Runs the co-evolutionary training loop. Red and Blue adapt across N rounds.
-Saves Blue's trained weights at the end.
+Mode 1 produces:
+- `01_attacker_detector_trajectory.png` — epsilon and threshold over rounds
+- `02_epsilon_vs_outcome.png` — perturbation magnitude with caught/evaded regions
+- `03_detection_performance.png` — precision, recall, F1, evasion rate, detector/attacker lead shading
+- `04_pr_roc.png` — precision-recall and ROC curves
+- `05_channel_activity.png` — which forensic channel fired each round
+- `06_catch_rate.png` — cumulative and rolling catch rate
 
-```bash
-python3 scripts/run.py testImages/L882015
+Mode 4 additionally produces:
+- `persona_01_epsilon_trajectories.png` — epsilon by threat profile
+- `persona_02_evasion_rate.png` — rolling evasion rate by threat profile
+- `persona_03_evasion_damage_pareto.png` — evasion-damage tradeoff across personas
+
+---
+
+## Citation
+
+If you use ARDA in your research please cite:
+
+```
+Rezene, R. (2026). ARDA: Adversarial Resilience for Data Authenticity.
+University of Arizona UROC Research Program.
+Supervisor: Dr. Alexander Bucksch, Computational Plant Sciences Laboratory.
 ```
 
-### Mode 2 — Inference (real-world detection)
-Loads trained Blue weights and checks whether uploaded images have been tampered with.
-No Red, no training, no co-evolution — just detection.
+---
 
-```bash
-python3 scripts/detect.py path/to/root_image.jpg
-python3 scripts/detect.py path/to/folder/of/images/
-```
+## Acknowledgments
 
-Run Mode 1 first to train Blue. Mode 2 loads the weights Mode 1 saved.
-
-
-
--------------------------------------------------------------------------------
-Stand alone research scripts for research purposes: 
-
-scripts/generate_dataset.py
-Run this first, before any pretraining. It takes your root images, attacks them with all three CTI personas at randomized epsilon values, and saves labeled clean/tampered tensor pairs to data/dataset/. You run this once when you have enough real lab images to build a meaningful training set. Run it again if you get more images or want a larger dataset. Everything that comes after depends on this output existing.
-bashpython3 scripts/generate_dataset.py data/ --n 300
-
-scripts/pretrain_blue.py
-Run this second, after generate_dataset.py. It trains Blue's ViT on the saved dataset using a proper train/validation split, saves the best-performing weights to models/blue_pretrained.pt, and prints validation accuracy at the end of every epoch. You run this once to produce the pretrained weights you commit to GitHub. Run it again if you regenerated the dataset with more images or want to experiment with more epochs. The weights it produces are what make Mode 2 work immediately for anyone who clones your repo.
-bashpython3 scripts/pretrain_blue.py --epochs 20
-
-scripts/evaluate_pretrained.py
-Run this third, after pretraining. It loads blue_pretrained.pt, reconstructs the held-out split that pretraining never touched, runs the full three-layer Blue detection on every held-out image, and reports accuracy, precision, recall, F1, confusion matrix, and which checks contributed to each catch. These are the formal metrics you report in your paper for the pretrained detector. Run it any time you want to re-evaluate after changing Blue's architecture, the metadata checks, or the preprocessing. Run it once before and once after adding the DateTime and sparsity metadata improvements to show the difference those changes made.
-bashpython3 scripts/evaluate_pretrained.py
-
-scripts/run.py
-Called by main.py when the user chooses Mode 1. You don't run this directly under normal circumstances — python3 main.py handles it. The one time you'd run it directly is if you want to test the simulation with custom parameters without going through the interactive prompts, by importing and calling run_rounds() from another script.
-
-scripts/detect.py
-Called by main.py when the user chooses Mode 2. Same as run.py — you don't run this directly under normal circumstances. The exception is if you want to quickly check one image from the terminal during development without going through the full main.py menu.
-bashpython3 scripts/detect.py data/testImages/L882015/some_image.jpg
+This research was conducted through the University of Arizona UROC (Undergraduate Research Opportunities Consortium) program under the supervision of Dr. Alexander Bucksch, Computational Plant Sciences Laboratory. Plant root image data was provided by the Bucksch Lab.
