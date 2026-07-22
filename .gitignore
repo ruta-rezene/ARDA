@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+cads_env/
+data/*
+!data/.gitkeep
+dataset/*.pt
+models/blue_trained.pt
+results/*.png
+results/*.json
+.DS_Store
